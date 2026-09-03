@@ -4,9 +4,52 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../widgets/post_card.dart';
 import '../widgets/custom_font.dart';
 import '../constants.dart';
+import '../models/post.dart';
+import '../services/post_service.dart';
 
-class NewsFeedScreen extends StatelessWidget {
+class NewsFeedScreen extends StatefulWidget {
   const NewsFeedScreen({super.key});
+
+  @override
+  State<NewsFeedScreen> createState() => _NewsFeedScreenState();
+}
+
+class _NewsFeedScreenState extends State<NewsFeedScreen> {
+  final PostService _postService = PostService();
+  List<Post> _apiPosts = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPosts();
+  }
+
+  // Fetches live posts from https://dummyjson.com/posts
+  Future<void> _fetchPosts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final posts = await _postService.getAllPosts(limit: 30);
+      if (mounted) {
+        setState(() {
+          _apiPosts = posts;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,141 +57,244 @@ class NewsFeedScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SizedBox(
-        width: ScreenUtil().screenWidth,
-        child: ListView.builder(
-          // itemCount = Carousel (1) + Mixed Feed Items
-          itemCount: mixedFeed.length + 1,
-          itemBuilder: (context, index) {
-            
-            // ---------------------------------------------------------
-            // ENHANCEMENT 2: Advertisement/Promotion Carousel
-            // ---------------------------------------------------------
-            if (index == 0) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(height: ScreenUtil().setHeight(10)),
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                        horizontal: ScreenUtil().setWidth(15)),
-                    child: CustomFont(
-                      text: 'Advertisement/ Promotion',
-                      fontSize: ScreenUtil().setSp(18),
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? FB_LIGHT_PRIMARY : FB_DARK_PRIMARY,
+      body: RefreshIndicator(
+        onRefresh: _fetchPosts,
+        color: FB_DARK_PRIMARY,
+        child: SizedBox(
+          width: ScreenUtil().screenWidth,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            // itemCount = Carousel Header (1) + (Loading / Error / Posts + Interleaved Ads)
+            itemCount: 1 + (_isLoading && _apiPosts.isEmpty
+                ? 1
+                : _errorMessage != null && _apiPosts.isEmpty
+                    ? 1
+                    : _calculateTotalFeedCount()),
+            itemBuilder: (context, index) {
+              // ---------------------------------------------------------
+              // HEADER (Index 0): Advertisement / Promotion Carousel
+              // ---------------------------------------------------------
+              if (index == 0) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(height: ScreenUtil().setHeight(10)),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: ScreenUtil().setWidth(15),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          CustomFont(
+                            text: 'Advertisement / Promotion',
+                            fontSize: ScreenUtil().setSp(18),
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? FB_LIGHT_PRIMARY : FB_DARK_PRIMARY,
+                          ),
+                          if (_isLoading)
+                            SizedBox(
+                              width: 16.r,
+                              height: 16.r,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: FB_LIGHT_PRIMARY,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                  SizedBox(height: ScreenUtil().setHeight(10)),
-                  CarouselSlider(
-                    options: CarouselOptions(
-                      height: 550.0,
-                      enableInfiniteScroll: true,
-                      padEnds: false,
-                      autoPlay: true,
-                      enlargeCenterPage: true,
-                      viewportFraction: 0.85,
-                      aspectRatio: 16 / 9,
-                      scrollPhysics: const BouncingScrollPhysics(),
+                    SizedBox(height: ScreenUtil().setHeight(10)),
+                    CarouselSlider(
+                      options: CarouselOptions(
+                        height: 550.0,
+                        enableInfiniteScroll: true,
+                        padEnds: false,
+                        autoPlay: true,
+                        enlargeCenterPage: true,
+                        viewportFraction: 0.85,
+                        aspectRatio: 16 / 9,
+                        scrollPhysics: const BouncingScrollPhysics(),
+                      ),
+                      items: carouselPosts.asMap().entries.map((entry) {
+                        final postIndex = entry.key;
+                        final post = entry.value;
+                        return PostCard(
+                          postId: postIndex + 1,
+                          userName: post.username,
+                          postContent: post.content,
+                          numOfLikes: post.likes,
+                          date: post.date,
+                          imageUrl: post.imagePath ?? '',
+                          profileImageUrl: post.profileImageUrl,
+                          adsMarket: post.adsMarket,
+                          productUrl: post.productUrl,
+                        );
+                      }).toList(),
                     ),
-                    items: carouselPosts.asMap().entries.map((entry) {
-                      final postIndex = entry.key;
-                      final post = entry.value;
-                      return PostCard(
-                        postId: postIndex + 1,
-                        userName: post.username,
-                        postContent: post.content,
-                        numOfLikes: post.likes,
-                        date: post.date,
-                        imageUrl: post.imagePath ?? '',
-                        profileImageUrl: post.profileImageUrl,
-                        adsMarket: post.adsMarket,
-                        productUrl: post.productUrl,
-                      );
-                    }).toList(),
-                  ),
-                  SizedBox(height: ScreenUtil().setHeight(10)),
-                  Divider(thickness: 4, color: Theme.of(context).dividerColor),
+                    SizedBox(height: ScreenUtil().setHeight(10)),
+                    Divider(thickness: 4, color: Theme.of(context).dividerColor),
                   ],
-              );
-            }
+                );
+              }
 
-            // ---------------------------------------------------------
-            // ENHANCEMENT 1: Alternating Posts and Ads
-            // ---------------------------------------------------------
-            // Adjust index by -1 because index 0 is used by the Carousel
-            int feedIndex = index - 1;
-            final post = mixedFeed[feedIndex];
-
-            // ---------------------------------------------------------
-            // ENHANCEMENT 2: Advertisement/Promotion Carousel for Specific Ads
-            // ---------------------------------------------------------
-            if (post.date == 'Sponsored' && adCarousels.containsKey(post.username)) {
-               final adImages = adCarousels[post.username]!;
-               
-               return Column(
-                 crossAxisAlignment: CrossAxisAlignment.start,
-                 children: [
-                   SizedBox(height: ScreenUtil().setHeight(10)),
-                   CarouselSlider(
-                    options: CarouselOptions(
-                      height: 550.0,
-                      enableInfiniteScroll: true,
-                      padEnds: false,
-                      autoPlay: true,
-                      enlargeCenterPage: true,
-                      viewportFraction: 0.85,
-                      aspectRatio: 16 / 9,
-                      scrollPhysics: const BouncingScrollPhysics(),
+              // Loading State (below carousel)
+              if (_isLoading && _apiPosts.isEmpty) {
+                return Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40.h),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        const CircularProgressIndicator(color: FB_DARK_PRIMARY),
+                        SizedBox(height: 12.h),
+                        Text(
+                          'Loading posts from DummyJSON...',
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 14.sp,
+                          ),
+                        ),
+                      ],
                     ),
-                    items: adImages.asMap().entries.map((entry) {
-                      final itemIndex = entry.key;
-                      final item = entry.value;
-                      return PostCard(
-                        postId: feedIndex * 5 + itemIndex + 1,
-                        userName: item.username,        // Unique per slide
-                        postContent: item.content,      // Unique per slide
-                        numOfLikes: post.likes,         // Shared likes count
-                        date: post.date,
-                        imageUrl: item.imagePath,       // Unique image
-                        profileImageUrl: item.profileImageUrl, // Unique avatar
-                        adsMarket: item.adsMarket,      // Unique CTA
-                        productUrl: item.productUrl,    // NEW: Unique link
-                      );
-                    }).toList(),
                   ),
-                  SizedBox(height: ScreenUtil().setHeight(10)),
-                  Divider(thickness: 1, color: Theme.of(context).dividerColor),
-                 ],
-               );
-            }
+                );
+              }
 
-            return PostCard(
-              postId: feedIndex + 1,
-              userName: post.username,
-              postContent: post.content,
-              numOfLikes: post.likes,
-              date: post.date,
-              imageUrl: post.imagePath ?? '',
-              profileImageUrl: post.profileImageUrl,
-              adsMarket: post.adsMarket,
-              productUrl: post.productUrl,
-            );
-          },
+              // Error State (below carousel)
+              if (_errorMessage != null && _apiPosts.isEmpty) {
+                return Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40.h, horizontal: 20.w),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.error_outline, size: 48.r, color: Colors.redAccent),
+                        SizedBox(height: 10.h),
+                        Text(
+                          'Failed to load posts: $_errorMessage',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.redAccent, fontSize: 14.sp),
+                        ),
+                        SizedBox(height: 12.h),
+                        ElevatedButton.icon(
+                          onPressed: _fetchPosts,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: FB_DARK_PRIMARY,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              // ---------------------------------------------------------
+              // FEED ITEMS: Dynamic DummyJSON Posts + Interleaved Ads
+              // ---------------------------------------------------------
+              final feedIndex = index - 1;
+              return _buildFeedItem(feedIndex);
+            },
+          ),
         ),
       ),
     );
   }
+
+  // Calculates feed length including interleaved sponsored carousels
+  int _calculateTotalFeedCount() {
+    if (_apiPosts.isEmpty) return 0;
+    // Interleave 1 sponsored carousel every 5 posts
+    final adCount = (_apiPosts.length / 5).floor().clamp(0, adCarousels.length);
+    return _apiPosts.length + adCount;
+  }
+
+  // Builds either a dynamic DummyJSON PostCard or a Sponsored Ad Carousel
+  Widget _buildFeedItem(int feedIndex) {
+    // Check if this position is designated for an ad carousel (every 6th item in feed)
+    final adKeys = adCarousels.keys.toList();
+    if (feedIndex > 0 && feedIndex % 6 == 5) {
+      final adSlot = (feedIndex ~/ 6) % adKeys.length;
+      final adKey = adKeys[adSlot];
+      final adImages = adCarousels[adKey] ?? [];
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(height: ScreenUtil().setHeight(10)),
+          CarouselSlider(
+            options: CarouselOptions(
+              height: 550.0,
+              enableInfiniteScroll: true,
+              padEnds: false,
+              autoPlay: true,
+              enlargeCenterPage: true,
+              viewportFraction: 0.85,
+              aspectRatio: 16 / 9,
+              scrollPhysics: const BouncingScrollPhysics(),
+            ),
+            items: adImages.asMap().entries.map((entry) {
+              final itemIndex = entry.key;
+              final item = entry.value;
+              return PostCard(
+                postId: 1000 + feedIndex * 10 + itemIndex,
+                userName: item.username,
+                postContent: item.content,
+                numOfLikes: 1500 + itemIndex * 100,
+                date: 'Sponsored',
+                imageUrl: item.imagePath,
+                profileImageUrl: item.profileImageUrl,
+                adsMarket: item.adsMarket,
+                productUrl: item.productUrl,
+              );
+            }).toList(),
+          ),
+          SizedBox(height: ScreenUtil().setHeight(10)),
+          Divider(thickness: 1, color: Theme.of(context).dividerColor),
+        ],
+      );
+    }
+
+    // Calculate the post index mapped from the interleaved feed
+    final postIndex = feedIndex - (feedIndex ~/ 6);
+    if (postIndex < 0 || postIndex >= _apiPosts.length) {
+      return const SizedBox.shrink();
+    }
+
+    final post = _apiPosts[postIndex];
+    final tagsText = post.tags.isNotEmpty
+        ? post.tags.map((t) => '#$t').join(' ')
+        : 'General';
+
+    final contentText = post.title.isNotEmpty
+        ? '${post.title.toUpperCase()}\n\n${post.body}'
+        : post.body;
+
+    return PostCard(
+      postId: post.id,
+      userId: post.userId,
+      userName: 'User #${post.userId}',
+      postContent: contentText,
+      numOfLikes: post.likes,
+      date: tagsText,
+      imageUrl: '',
+      profileImageUrl: 'https://dummyjson.com/icon/user${post.userId}/128',
+      adsMarket: '',
+      productUrl: null,
+    );
+  }
 }
-// --- DATA MODELS ---
+
+// --- DATA MODELS FOR ADS ---
 
 class CarouselItem {
   final String imagePath;
   final String username;
   final String profileImageUrl;
-  final String content;       // Optional: unique caption per slide
-  final String adsMarket;     // Optional: unique CTA per slide
-  final String? productUrl;   // Optional: direct link to product
+  final String content;
+  final String adsMarket;
+  final String? productUrl;
 
   CarouselItem({
     required this.imagePath,
@@ -160,7 +306,7 @@ class CarouselItem {
   });
 }
 
-class Post {
+class SponsoredPost {
   final String username;
   final String content;
   final String date;
@@ -169,9 +315,9 @@ class Post {
   final String? imagePath;
   final String profileImageUrl;
   final String adsMarket;
-  final String? productUrl; // NEW: Direct link to product
+  final String? productUrl;
 
-  Post({
+  SponsoredPost({
     required this.username,
     required this.content,
     required this.date,
@@ -184,9 +330,9 @@ class Post {
   });
 }
 
-// --- DATA SOURCE ---
+// --- DATA SOURCE FOR ADS ---
 
-// Mapping for Ad Carousels (Exactly 3 for the Mixed Feed)
+// Mapping for Ad Carousels (Sponsored Feed)
 final Map<String, List<CarouselItem>> adCarousels = {
   'Retro & Skate': [
     CarouselItem(
@@ -316,9 +462,9 @@ final Map<String, List<CarouselItem>> adCarousels = {
   ],
 };
 
-final List<Post> carouselPosts = [
+final List<SponsoredPost> carouselPosts = [
   // 1. Nike Dunk Low
-  Post(
+  SponsoredPost(
     username: 'Nike',
     content: 'Dunk Low',
     date: 'Sponsored',
@@ -330,7 +476,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco/79a35c4b-23ec-4d9e-a2f3-bb0049f96fbd/NIKE+DUNK+LOW+RETRO.png',
   ),
   // 2. Adidas Samba
-  Post(
+  SponsoredPost(
     username: 'Adidas',
     content: 'Samba',
     date: 'Sponsored',
@@ -342,7 +488,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://is4.revolveassets.com/images/p4/n/z/AORI-WZ267_V1.jpg',
   ),
   // 3. New Balance 550 White
-  Post(
+  SponsoredPost(
     username: 'New Balance',
     content: '550 White',
     date: 'Sponsored',
@@ -354,7 +500,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://tse4.mm.bing.net/th/id/OIP.l_JZ7dC5UTnnf1nZgEjBpQHaFM?rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 4. Jordan 1 High
-  Post(
+  SponsoredPost(
     username: 'Jordan',
     content: '1 High',
     date: 'Sponsored',
@@ -366,7 +512,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://static.nike.com/a/images/c_limit,w_592,f_auto/t_product_v1/u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/a278b4e6-1eea-43b5-83b6-5073e377b634/AIR+JORDAN+1+RETRO+HIGH+OG.png',
   ),
   // 5. Yeezy 350 V2
-  Post(
+  SponsoredPost(
     username: 'Yeezy',
     content: '350 V2',
     date: 'Sponsored',
@@ -378,7 +524,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://tse1.mm.bing.net/th/id/OIP.hNficaGtPU8djSV8zKzIfQHaFL?rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 6. Vans Slip-On
-  Post(
+  SponsoredPost(
     username: 'Vans',
     content: 'Slip-On',
     date: 'Sponsored',
@@ -390,7 +536,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto/f8649f02-96f0-4c4c-b330-99cac1ea0c7a/NIKE+SB+JANOSKI%2B+SLIP.png',
   ),
   // 7. Converse Chucks
-  Post(
+  SponsoredPost(
     username: 'Converse',
     content: 'Chucks',
     date: 'Sponsored',
@@ -402,7 +548,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://tse3.mm.bing.net/th/id/OIP.zJVjxB6V9zIb-utpk7NpnQHaFj?rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 8. Nike Air Force 1
-  Post(
+  SponsoredPost(
     username: 'Nike',
     content: 'Air Force 1',
     date: 'Sponsored',
@@ -414,7 +560,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto/b7d9211c-26e7-431a-ac24-b0540fb3c00f/AIR+FORCE+1+%2707.png',
   ),
   // 9. Puma Suede
-  Post(
+  SponsoredPost(
     username: 'Puma',
     content: 'Suede',
     date: 'Sponsored',
@@ -426,7 +572,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://images.puma.com/image/upload/f_auto,q_auto,b_rgb:fafafa,w_2000,h_2000/global/395205/02/sv01/fnd/PNA/fmt/png/Suede-XL-Sneakers',
   ),
   // 10. Reebok Club C
-  Post(
+  SponsoredPost(
     username: 'Reebok',
     content: 'Club C',
     date: 'Sponsored',
@@ -438,7 +584,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://is4.revolveassets.com/images/p4/n/uv/REEF-MZ65_V2.jpg',
   ),
   // 11. Asics Gel-Lyte
-  Post(
+  SponsoredPost(
     username: 'Asics',
     content: 'Gel-Lyte',
     date: 'Sponsored',
@@ -450,7 +596,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://media.sivasdescalzo.com/media/catalog/product/1/2/1203A330-400_sivasdescalzo-Asics-GEL-LYTE_III_OG-1687351258-2.jpg',
   ),
   // 12. Saucony Jazz
-  Post(
+  SponsoredPost(
     username: 'Saucony',
     content: 'Jazz',
     date: 'Sponsored',
@@ -462,7 +608,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://th.bing.com/th/id/OIP.L1v4Lej5aHhfr3FW6GqU0QHaD4?o=7rm=3&rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 13. Fila Disruptor
-  Post(
+  SponsoredPost(
     username: 'Fila',
     content: 'Disruptor',
     date: 'Sponsored',
@@ -474,7 +620,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://th.bing.com/th/id/OIP.uWf-4-hEfXZIcwrgcWyIXwHaFj?o=7rm=3&rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 14. Under Armour Curry
-  Post(
+  SponsoredPost(
     username: 'Under Armour',
     content: 'Curry',
     date: 'Sponsored',
@@ -486,7 +632,7 @@ final List<Post> carouselPosts = [
     productUrl: 'https://tse1.mm.bing.net/th/id/OIP.q7eKFo-4QdytFzE2hltR2AHaE8?rs=1&pid=ImgDetMain&o=7&rm=3',
   ),
   // 15. Nike Blazer Mid
-  Post(
+  SponsoredPost(
     username: 'Nike',
     content: 'Blazer Mid',
     date: 'Sponsored',
@@ -496,87 +642,5 @@ final List<Post> carouselPosts = [
     profileImageUrl: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto/fb7eda3c-5ac8-4d05-a18f-1c2c5e82e36e/BLAZER+MID+%2777+VNTG.png',
     adsMarket: '₱ 3,400.00',
     productUrl: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto/fb7eda3c-5ac8-4d05-a18f-1c2c5e82e36e/BLAZER+MID+%2777+VNTG.png',
-  ),
-];
-
-final List<Post> mixedFeed = [
-  // --- Post 1 (User) ---
-  Post(
-    username: 'Sean Angelo Crame',
-    content: 'Kwatro sana this sem T_T',
-    date: 'October 11',
-    likes: 100,
-    comments: 10,
-    imagePath: null,
-    profileImageUrl: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&w=200&q=80',
-  ),
-  
-  // --- Post 2 (Carousel 1 - Retro & Skate) ---
-  Post(
-    username: 'Retro & Skate',
-    content: 'Timeless classics. Vans, New Balance, and more.',
-    date: 'Sponsored',
-    likes: 1200,
-    comments: 45,
-    imagePath: 'https://th.bing.com/th/id/R.b8541404bccde3a57ddbb7de60c8f3ac?rik=eHfLv8krXIu2rA&riu=http%3a%2f%2fshoenami.com.ph%2fcdn%2fshop%2ffiles%2fWS327KB-1.jpg%3fv%3d1690189059%26width%3d2048', 
-    profileImageUrl: 'https://th.bing.com/th/id/R.b8541404bccde3a57ddbb7de60c8f3ac?rik=eHfLv8krXIu2rA&riu=http%3a%2f%2fshoenami.com.ph%2fcdn%2fshop%2ffiles%2fWS327KB-1.jpg%3fv%3d1690189059%26width%3d2048',
-    adsMarket: 'Shop Classics',
-  ),
-
-  // --- Post 3 (User) ---
-  Post(
-    username: 'ako nalang kasi',
-    content: 'Sana all',
-    date: 'December 2',
-    likes: 200,
-    comments: 20,
-    imagePath: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=500&q=80',
-    profileImageUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
-  ),
-
-  // --- Post 4 (Carousel 2 - Performance & Air) ---
-  Post(
-    username: 'Performance & Air',
-    content: 'Engineered for speed. Innovation by Nike and Adidas.',
-    date: 'Sponsored',
-    likes: 4200,
-    comments: 156,
-    imagePath: 'https://static.nike.com/a/images/t_PDP_1280_v1/f_auto,q_auto:eco/fjfip8ga1ep22vhxdcew/air-max-97-shoe-EBZrb8.png', 
-    profileImageUrl: 'https://static.nike.com/a/images/t_PDP_1280_v1/f_auto,q_auto:eco/fjfip8ga1ep22vhxdcew/air-max-97-shoe-EBZrb8.png',
-    adsMarket: 'Shop Tech',
-  ),
-  
-  // --- Post 5 (User) ---
-  Post(
-    username: 'Samuel',
-    content: 'Aray ko',
-    date: 'December 3',
-    likes: 50,
-    comments: 5,
-    imagePath: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=500&q=80',
-    profileImageUrl: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=100&q=80',
-  ),
-
-  // --- Post 6 (Carousel 3 - Hype & Utility) ---
-  Post(
-    username: 'Hype & Utility',
-    content: 'Grail status drops. Jordan, Salomon, Hoka, and Crocs.',
-    date: 'Sponsored',
-    likes: 8500,
-    comments: 320,
-    imagePath: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/c873f01d-4c83-4a08-ace4-a4ce8589f122/AIR+JORDAN+1+LOW+SE.png', 
-    profileImageUrl: 'https://static.nike.com/a/images/t_web_pdp_936_v2/f_auto,u_126ab356-44d8-4a06-89b4-fcdcc8df0245,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/c873f01d-4c83-4a08-ace4-a4ce8589f122/AIR+JORDAN+1+LOW+SE.png',
-    adsMarket: 'Explore Hype',
-  ),
-
-  // --- Post 7 (User) ---
-  Post(
-    username: 'Kurt',
-    content: 'Baka kai makalimutan ko -_-',
-    date: 'December 3',
-    likes: 50,
-    comments: 5,
-    imagePath: 'https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?auto=format&fit=crop&w=500&q=80',
-    profileImageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
   ),
 ];

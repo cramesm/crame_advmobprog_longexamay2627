@@ -1,10 +1,10 @@
-import 'package:crame_longexam/widgets/custom_textformfield.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import '../constants.dart';
 import '../services/user_service.dart';
 import '../widgets/custom_dialogs.dart';
 import '../widgets/custom_inkwell_button.dart';
+import '../widgets/custom_textformfield.dart';
 
 // Enhancement 1: Login screen that authenticates with DummyJSON API
 class LogInScreen extends StatefulWidget {
@@ -137,7 +137,7 @@ class _LogInScreenState extends State<LogInScreen> {
                           hintText: 'Password',
                         ),
 
-                        SizedBox(height: ScreenUtil().setHeight(30)),
+                        SizedBox(height: ScreenUtil().setHeight(20)),
 
                         if (_isLoading)
                           const Center(
@@ -145,7 +145,7 @@ class _LogInScreenState extends State<LogInScreen> {
                               color: FB_DARK_PRIMARY,
                             ),
                           )
-                        else
+                        else ...[
                           CustomInkwellButton(
                             onTap: _handleLogin,
                             height: ScreenUtil().setHeight(40),
@@ -153,6 +153,24 @@ class _LogInScreenState extends State<LogInScreen> {
                             buttonName: 'Login',
                             fontSize: ScreenUtil().setSp(15),
                           ),
+                          SizedBox(height: ScreenUtil().setHeight(8)),
+                          TextButton(
+                            onPressed: () {
+                              setState(() {
+                                usernameController.text = 'emilys';
+                                passwordController.text = 'emilyspass';
+                              });
+                            },
+                            child: Text(
+                              'Use Demo Account (emilys)',
+                              style: TextStyle(
+                                color: FB_SECONDARY,
+                                fontSize: ScreenUtil().setSp(12),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),

@@ -4,7 +4,7 @@ import '../constants.dart';
 import '../services/user_service.dart';
 import '../widgets/custom_font.dart';
 
-// Enhancement 1: Splash screen that checks user login state and routes accordingly
+// Enhancement 1: Splash screen that checks user login state and routes
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 

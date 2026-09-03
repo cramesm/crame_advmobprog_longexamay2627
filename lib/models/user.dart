@@ -22,7 +22,6 @@ class User {
     required this.refreshToken,
   });
 
-  // Formats full name with fallback to username
   String get fullName => '$firstName $lastName'.trim().isEmpty ? username : '$firstName $lastName'.trim();
 
   // Deserializes JSON response from DummyJSON auth/user API
